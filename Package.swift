@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "CoreBedrock",
+    name: "core-bedrock",
     platforms: [
         .iOS(.v14),
         .macOS(.v11),
