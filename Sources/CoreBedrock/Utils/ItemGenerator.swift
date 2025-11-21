@@ -25,7 +25,7 @@ enum ItemGenerator {
             type: String = "minecraft:filled_map",
             name: String? = nil
         ) -> Self {
-            Self.init(slot: slot, type: type, name: name, count: 1, damage: 0, wasPickedUp: false, tags: [
+            Self(slot: slot, type: type, name: name, count: 1, damage: 0, wasPickedUp: false, tags: [
                 ByteTag(name: "map_display_players", 1),
                 IntTag(name: "map_name_index", 1),
                 LongTag(name: "map_uuid", mapID),
@@ -39,7 +39,7 @@ enum ItemGenerator {
             items: [CompoundTag]
         ) throws -> Self {
             let innerItemsTag = try ListTag(name: "Items", items)
-            return Self.init(
+            return Self(
                 slot: slot,
                 type: type,
                 name: name,
