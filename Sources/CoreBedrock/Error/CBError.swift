@@ -14,4 +14,7 @@ public enum CBError: Error, Equatable, LocalizedError {
     case invalidDataLength(Int)
     case failedParseSubchunk
     case invalidSubChunkVersion(Int)
+    case failedCreateImageContext
+    case failedToAllocateMapIDs
+    case failedToSaveMapDataTag
 }
