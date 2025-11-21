@@ -4,9 +4,9 @@
 
 import Foundation
 
-struct MCBiomeStorage {
+struct PackedBiomeHeightColumn {
     let heightBytes: [UInt8] // 1 block = 2 bytes
-    let biomeSections: [SubChunkBiomeSection]
+    let biomeSections: [PackedBiomeSection]
 
     @inline(__always)
     func highestBlockY(atLocalX localX: Int, localZ: Int) -> UInt16? {
@@ -30,7 +30,7 @@ struct MCBiomeStorage {
         return subChunkBiome.paletteValue(localX: localX, localY: localY, localZ: localZ)
     }
 
-    struct SubChunkBiomeSection: PaletteReadable {
+    struct PackedBiomeSection: PackedPaletteReadable {
         let chunkY: Int8
         let bitWidth: Int
         let palette: [Int32]

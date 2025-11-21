@@ -12,4 +12,6 @@ public enum CBError: Error, Equatable, LocalizedError {
     case unhandledLevelDBKey(String)
     case failedSaveImage(URL)
     case invalidDataLength(Int)
+    case failedParseSubchunk
+    case invalidSubChunkVersion(Int)
 }

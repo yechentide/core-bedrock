@@ -19,25 +19,25 @@ import Foundation
  */
 // swiftlint:enable line_length
 
-struct SubChunkParser {
+public struct SubChunkParser {
     private let binaryReader: CBBinaryReader
     private let chunkY: Int8
 
-    init(data: Data, chunkY: Int8) {
+    public init(data: Data, chunkY: Int8) {
         self.binaryReader = CBBinaryReader(data: data)
         self.chunkY = chunkY
     }
 
-    func lightParse() throws -> MCSubChunkStorage? {
+    public func parsePackedLayer() throws -> PackedSubChunk? {
         let storageVersion = try binaryReader.readUInt8()
         return switch storageVersion {
-        case 9: try self.parseV9Light()
-        case 8: try self.parseV8Light()
+        case 9: try self.parseV9Packed()
+        case 8: try self.parseV8Packed()
         default: nil
         }
     }
 
-    private func parseV9Light() throws -> MCSubChunkStorage? {
+    private func parseV9Packed() throws -> PackedSubChunk? {
         let layerCount = try binaryReader.readUInt8()
         let chunkY = try binaryReader.readInt8()
         guard chunkY == self.chunkY, layerCount > 0 else {
@@ -48,6 +48,18 @@ struct SubChunkParser {
         let blockPalette = try binaryReader.readBlockPalette()
         guard !blockPalette.isEmpty, !blockIndicesData.isEmpty else {
             return nil
+        }
+        guard layerCount > 1 else {
+            return .init(
+                version: 9,
+                chunkY: self.chunkY,
+                blockLayer: .init(
+                    bitWidth: blockBitWidth,
+                    palette: blockPalette,
+                    indicesBytes: blockIndicesData
+                ),
+                liquidLayer: nil
+            )
         }
 
         var liquidBitWidth = 1
@@ -61,7 +73,7 @@ struct SubChunkParser {
             }
         }
 
-        return MCSubChunkStorage(
+        return .init(
             version: 9,
             chunkY: self.chunkY,
             blockLayer: .init(
@@ -77,7 +89,7 @@ struct SubChunkParser {
         )
     }
 
-    private func parseV8Light() throws -> MCSubChunkStorage? {
+    private func parseV8Packed() throws -> PackedSubChunk? {
         let layerCount = try binaryReader.readUInt8()
         guard layerCount > 0 else {
             return nil
@@ -87,6 +99,18 @@ struct SubChunkParser {
         let blockPalette = try binaryReader.readBlockPalette()
         guard !blockPalette.isEmpty, !blockIndicesData.isEmpty else {
             return nil
+        }
+        guard layerCount > 1 else {
+            return .init(
+                version: 9,
+                chunkY: self.chunkY,
+                blockLayer: .init(
+                    bitWidth: blockBitWidth,
+                    palette: blockPalette,
+                    indicesBytes: blockIndicesData
+                ),
+                liquidLayer: nil
+            )
         }
 
         var liquidBitWidth = 1
@@ -100,7 +124,7 @@ struct SubChunkParser {
             }
         }
 
-        return MCSubChunkStorage(
+        return .init(
             version: 9,
             chunkY: self.chunkY,
             blockLayer: .init(
@@ -117,7 +141,7 @@ struct SubChunkParser {
     }
 
     // TODO: create MCBlock from block ID and block data // swiftlint:disable:this todo
-    private func parseClassicLight() throws -> MCSubChunkStorage? {
+    private func parseClassicPacked() throws -> PackedSubChunk? {
         var blockIDList = [UInt8]()
         var blockDataList = [UInt8]()
         // 4096 bytes for block ids
@@ -149,7 +173,7 @@ struct SubChunkParser {
             blockIndicesData.append(contentsOf: bytes)
         }
 
-        return MCSubChunkStorage(
+        return .init(
             version: 9,
             chunkY: self.chunkY,
             blockLayer: .init(
@@ -157,11 +181,7 @@ struct SubChunkParser {
                 palette: blockPalette,
                 indicesBytes: blockIndicesData
             ),
-            liquidLayer: .init(
-                bitWidth: 1,
-                palette: [],
-                indicesBytes: []
-            )
+            liquidLayer: nil
         )
     }
 

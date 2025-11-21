@@ -11,7 +11,7 @@ struct Data3DParser {
         self.binaryReader = CBBinaryReader(data: data)
     }
 
-    private func lightParseBiomeSection(chunkY: Int8) throws -> MCBiomeStorage.SubChunkBiomeSection? {
+    private func lightParseBiomeSection(chunkY: Int8) throws -> PackedBiomeHeightColumn.PackedBiomeSection? {
         let header = try binaryReader.readUInt8()
         if header == 0xFF {
             // skip chunks have not been loaded
@@ -46,7 +46,7 @@ struct Data3DParser {
         )
     }
 
-    func lightParse(dimension: MCDimension) throws -> MCBiomeStorage {
+    func lightParse(dimension: MCDimension) throws -> PackedBiomeHeightColumn {
         let chunkYRange = dimension.chunkYRange
         let minChunkY = chunkYRange.lowerBound
         let maxChunkY = chunkYRange.upperBound
@@ -58,7 +58,7 @@ struct Data3DParser {
 
         let heightBytes = try binaryReader.readBytes(heightBytesCount)
 
-        var biomeSections: [MCBiomeStorage.SubChunkBiomeSection] = []
+        var biomeSections: [PackedBiomeHeightColumn.PackedBiomeSection] = []
         for chunkY in minChunkY...maxChunkY {
             if let biomeSection = try lightParseBiomeSection(chunkY: chunkY) {
                 biomeSections.append(biomeSection)

@@ -2,7 +2,7 @@
 // Created by yechentide on 2025/09/20
 //
 
-protocol PaletteReadable {
+protocol PackedPaletteReadable {
     associatedtype PaletteValue
 
     var bitWidth: Int { get }
@@ -10,7 +10,7 @@ protocol PaletteReadable {
     var indicesBytes: [UInt8] { get }
 }
 
-extension PaletteReadable {
+extension PackedPaletteReadable {
     var indexBitMask: UInt32 {
         ~(UInt32.max << bitWidth)
     }
@@ -46,5 +46,28 @@ extension PaletteReadable {
         guard paletteIndex < self.palette.count else { return nil }
 
         return self.palette[paletteIndex]
+    }
+
+    func unpackPaletteIndices() -> [UInt16]? {
+        var result = [UInt16](repeating: 0, count: MCSubChunk.totalBlockCount)
+
+        for linear in 0..<MCSubChunk.totalBlockCount {
+            let wordIndex = linear / self.valuesPerWord
+            let byteOffset = wordIndex * 4
+
+            guard byteOffset + 4 <= self.indicesBytes.count else { return nil }
+
+            let word = self.indicesBytes.withUnsafeBytes {
+                $0.load(fromByteOffset: byteOffset, as: UInt32.self)
+            }
+            let indexInWord = linear % self.valuesPerWord
+            let paletteIndex = self.indexBitMask & (word >> (indexInWord * self.bitWidth))
+
+            guard paletteIndex < palette.count else { return nil }
+
+            result[linear] = UInt16(paletteIndex)
+        }
+
+        return result
     }
 }
