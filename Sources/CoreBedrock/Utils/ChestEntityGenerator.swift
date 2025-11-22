@@ -3,9 +3,9 @@
 //
 
 public enum ChestEntityGenerator {
-    static let capacity = 27
+    private static let capacity = 27
 
-    static func place(database: LevelKeyValueStore, x: Int32, y: Int32, z: Int32, items: [CompoundTag]) throws {
+    public static func place(database: LevelKeyValueStore, x: Int32, y: Int32, z: Int32, items: [CompoundTag]) throws {
         try self.addBlockPalette(database: database, x: x, y: y, z: z)
         try self.addBlockEntityData(database: database, x: x, y: y, z: z, items: items)
     }

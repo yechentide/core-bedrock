@@ -2,14 +2,14 @@
 // Created by yechentide on 2025/11/20
 //
 
-enum ItemGenerator {
-    struct BlockMeta {
+public enum ItemGenerator {
+    public struct BlockMeta {
         static let defaultVersion: Int32 = 18_168_865
         let states: [NBT]
         let version: Int32
     }
 
-    struct ItemMeta {
+    public struct ItemMeta {
         let slot: UInt8
         let type: String
         let name: String?
@@ -19,7 +19,7 @@ enum ItemGenerator {
         var tags: [NBT]
         var blockMeta: BlockMeta?
 
-        static func map(
+        public static func map(
             slot: UInt8,
             mapID: Int64,
             type: String = "minecraft:filled_map",
@@ -32,7 +32,7 @@ enum ItemGenerator {
             ])
         }
 
-        static func shulkerBox(
+        public static func shulkerBox(
             slot: UInt8,
             type: String = "minecraft:undyed_shulker_box",
             name: String? = nil,
@@ -52,7 +52,7 @@ enum ItemGenerator {
         }
     }
 
-    static func generate(_ meta: ItemMeta) throws -> CompoundTag {
+    public static func generate(_ meta: ItemMeta) throws -> CompoundTag {
         let itemTag = try CompoundTag([
             ByteTag(name: "Slot", meta.slot),
             StringTag(name: "Name", meta.type),

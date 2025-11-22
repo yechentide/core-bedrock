@@ -6,7 +6,7 @@ import LvDBWrapper
 
 public enum DimensionTransfer {
     /// Transfer mode for dimension data
-    public enum TransferMode: CaseIterable {
+    public enum TransferMode: CaseIterable, Sendable {
         /// Delete all target keys for dimension, then write all source keys
         case override
         /// Copy only keys that do not exist in target
