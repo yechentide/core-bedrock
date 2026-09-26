@@ -33,7 +33,9 @@ public enum MapArtGenerator {
         playerKey: Data,
         shulkerBoxName: String? = nil
     ) -> AsyncThrowingStream<MapArtGenerationEvent, any Error> {
-        let (stream, continuation) = AsyncThrowingStream<MapArtGenerationEvent, any Error>.makeStream()
+        let (stream, continuation) = AsyncThrowingStream<MapArtGenerationEvent, any Error>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
         let database = database
         let task = Task {
             do {
@@ -64,35 +66,43 @@ public enum MapArtGenerator {
         shulkerBoxName: String?,
         report: @Sendable @escaping (MapArtGenerationProgress) -> Void
     ) throws {
-        let (mapItems, mapDataDict) = try buildMapItemsAndData(
-            image: image, database: database, report: report
-        )
-
-        let totalMapCount = mapDataDict.count
-        var savedCount = 0
+        let tilesX = (image.width + self.tileSize - 1) / self.tileSize
+        let tilesY = (image.height + self.tileSize - 1) / self.tileSize
+        let totalMapCount = tilesX * tilesY
+        let mapIDs = try allocateMapIDs(in: database, count: totalMapCount, report: report)
+        var mapItems = [CompoundTag]()
+        var writtenKeys = [LvDBKey]()
         do {
-            for (lvdbKey, mapData) in mapDataDict {
+            for index in 0..<totalMapCount {
                 try Task.checkCancellation()
                 try autoreleasepool {
+                    let bytes = try tileBytes(image: image, x: index % tilesX, y: index / tilesX)
+                    report(.splittingImage(processedTileCount: index + 1, totalTileCount: totalMapCount))
+                    let mapData = try generateMapDataTag(id: mapIDs[index], bytes: bytes)
+                    let lvdbKey = LvDBKey.map(mapIDs[index])
                     let entryData = try mapData.toData()
+                    report(.generatingMapData(processedMapCount: index + 1, totalMapCount: totalMapCount))
                     try database.putData(entryData, forKey: lvdbKey.data)
+                    writtenKeys.append(lvdbKey)
+                    try mapItems.append(ItemGenerator.generate(ItemGenerator.ItemMeta.map(
+                        slot: 0, mapID: mapIDs[index], name: "Map [\(index + 1)/\(totalMapCount)]"
+                    )))
                 }
-                savedCount += 1
-                report(.savingMapData(savedMapCount: savedCount, totalMapCount: totalMapCount))
+                report(.savingMapData(savedMapCount: index + 1, totalMapCount: totalMapCount))
             }
             try Task.checkCancellation()
             report(.injectingItem)
             let shulkerBox = try ShulkerNestingPacker.pack(items: mapItems, rootName: shulkerBoxName)
             try ItemInjector.giveItemToPlayer(item: shulkerBox, playerKey: playerKey, in: database)
         } catch is CancellationError {
-            for lvdbKey in mapDataDict.keys {
+            for lvdbKey in writtenKeys {
                 try? autoreleasepool {
                     try database.removeValue(forKey: lvdbKey.data)
                 }
             }
             throw CancellationError()
         } catch {
-            for lvdbKey in mapDataDict.keys {
+            for lvdbKey in writtenKeys {
                 try? autoreleasepool {
                     try database.removeValue(forKey: lvdbKey.data)
                 }
@@ -101,65 +111,26 @@ public enum MapArtGenerator {
         }
     }
 
-    private static func buildMapItemsAndData(
-        image: CGImage,
-        database: any KeyValueStore,
-        report: @Sendable @escaping (MapArtGenerationProgress) -> Void
-    ) throws -> (items: [CompoundTag], data: [LvDBKey: CompoundTag]) {
-        var mapItemTagList = [CompoundTag]()
-        var mapDataTagDict = [LvDBKey: CompoundTag]()
+    static func tileBytes(image: CGImage, x: Int, y: Int) throws -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: tileSize * self.tileSize * 4)
+        try bytes.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: tileSize, height: tileSize,
+                bitsPerComponent: 8, bytesPerRow: tileSize * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { throw CBError.failedCreateImageContext }
 
-        try autoreleasepool {
-            try Task.checkCancellation()
-            let tiles = try split(image: image, report: report)
-            try Task.checkCancellation()
-            let mapIDList = try allocateMapIDs(in: database, count: tiles.count, report: report)
-
-            let totalMapCount = tiles.count
-            for (index, tilePixels) in tiles.enumerated() {
-                try Task.checkCancellation()
-                try autoreleasepool {
-                    let mapID = mapIDList[index]
-                    let mapDataTag = try generateMapDataTag(id: mapID, from: tilePixels)
-                    let mapItemTag = try ItemGenerator.generate(ItemGenerator.ItemMeta.map(
-                        slot: 0, mapID: mapID, name: "Map [\(index + 1)/\(tiles.count)]"
-                    ))
-                    mapItemTagList.append(mapItemTag)
-                    mapDataTagDict[LvDBKey.map(mapID)] = mapDataTag
-                    report(.generatingMapData(processedMapCount: index + 1, totalMapCount: totalMapCount))
-                }
-            }
+            // The old full-image bitmap was traversed from its first row.
+            // Translation preserves that ordering, including transparent edge padding.
+            context.translateBy(x: CGFloat(-x * self.tileSize), y: CGFloat(self.tileSize - image.height + y * self.tileSize))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         }
-
-        return (mapItemTagList, mapDataTagDict)
+        return bytes
     }
 
-    private static func generateMapDataTag(id: Int64, from pixels: [CGColor]) throws -> CompoundTag {
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(pixels.count * 4)
-        try autoreleasepool {
-            for (index, color) in pixels.enumerated() {
-                if index.isMultiple(of: 1024) {
-                    try Task.checkCancellation()
-                }
-
-                guard let components = color.components else {
-                    bytes.append(contentsOf: [0, 0, 0, 0])
-                    continue
-                }
-
-                let r = UInt8((!components.isEmpty ? components[0] : 0) * 255)
-                let g = UInt8((components.count > 1 ? components[1] : 0) * 255)
-                let b = UInt8((components.count > 2 ? components[2] : 0) * 255)
-                let a = UInt8((components.count > 3 ? components[3] : 1) * 255)
-
-                bytes.append(r)
-                bytes.append(g)
-                bytes.append(b)
-                bytes.append(a)
-            }
-        }
-        return try CompoundTag([
+    private static func generateMapDataTag(id: Int64, bytes: [UInt8]) throws -> CompoundTag {
+        try CompoundTag([
             LongTag(name: "mapId", id),
             LongTag(name: "parentMapId", -1),
             ByteArrayTag(name: "colors", bytes),
@@ -210,82 +181,4 @@ public enum MapArtGenerator {
 
         return ids
     }
-
-    // swiftlint:disable function_body_length
-    private static func split(
-        image: CGImage,
-        report: @Sendable @escaping (MapArtGenerationProgress) -> Void
-    ) throws -> [[CGColor]] {
-        let rgbSpace = CGColorSpaceCreateDeviceRGB()
-        let tilesX = (image.width + self.tileSize - 1) / self.tileSize
-        let tilesY = (image.height + self.tileSize - 1) / self.tileSize
-        let totalTileCount = tilesX * tilesY
-
-        var tiles: [[CGColor]] = []
-
-        let bytesPerPixel = 4
-        var pixelData = [UInt8](repeating: 0, count: image.width * image.height * bytesPerPixel)
-
-        guard let context = CGContext(
-            data: &pixelData,
-            width: image.width,
-            height: image.height,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerPixel * image.width,
-            space: rgbSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            throw CBError.failedCreateImageContext
-        }
-
-        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-
-        report(.splittingImage(processedTileCount: 0, totalTileCount: totalTileCount))
-
-        for tileY in 0..<tilesY {
-            try Task.checkCancellation()
-            for tileX in 0..<tilesX {
-                try Task.checkCancellation()
-                let tilePixels: [CGColor] = try autoreleasepool {
-                    var tilePixels: [CGColor] = []
-                    tilePixels.reserveCapacity(self.tileSize * self.tileSize)
-
-                    for y in 0..<self.tileSize {
-                        if y.isMultiple(of: 32) {
-                            try Task.checkCancellation()
-                        }
-                        for x in 0..<self.tileSize {
-                            let sourceX = tileX * self.tileSize + x
-                            let sourceY = tileY * self.tileSize + y
-
-                            if sourceX < image.width, sourceY < image.height {
-                                let pixelIndex = (sourceY * image.width + sourceX) * bytesPerPixel
-
-                                let r = CGFloat(pixelData[pixelIndex]) / 255.0
-                                let g = CGFloat(pixelData[pixelIndex + 1]) / 255.0
-                                let b = CGFloat(pixelData[pixelIndex + 2]) / 255.0
-                                let a = CGFloat(pixelData[pixelIndex + 3]) / 255.0
-
-                                if let color = CGColor(colorSpace: rgbSpace, components: [r, g, b, a]) {
-                                    tilePixels.append(color)
-                                }
-                            } else {
-                                // Padding: transparent
-                                if let color = CGColor(colorSpace: rgbSpace, components: [0, 0, 0, 0]) {
-                                    tilePixels.append(color)
-                                }
-                            }
-                        }
-                    }
-
-                    return tilePixels
-                }
-                tiles.append(tilePixels)
-                report(.splittingImage(processedTileCount: tiles.count, totalTileCount: totalTileCount))
-            }
-        }
-
-        return tiles
-    }
-    // swiftlint:enable function_body_length
 }
