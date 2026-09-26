@@ -17,7 +17,6 @@ enum NetEaseConstants {
 
     // Player Data Constants
     static let playerKeyPrefix = "player_"
-    static let expectedPlayerKeyLength = 50
 
     /// NBT Transform Constants
     static let scriptDataSignature = Data([

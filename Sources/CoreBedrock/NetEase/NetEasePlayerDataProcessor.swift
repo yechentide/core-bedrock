@@ -30,16 +30,17 @@ enum NetEasePlayerDataProcessor {
         }
 
         let iter = try database.makeIterator()
-        iter.move(to: Data(NetEaseConstants.playerKeyPrefix.utf8))
+        defer { iter.close() }
+        let playerPrefix = Data(NetEaseConstants.playerKeyPrefix.utf8)
+        iter.move(to: playerPrefix)
         while iter.isValid {
             try Task.checkCancellation()
             defer { iter.moveToNext() }
-            // player_server_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            // NetEase also stores player_uid_ records and ID mappings under player_.
+            // Scan the entire prefix; valid mappings require no transformation.
             guard
                 let key = iter.currentKey,
-                key.count == NetEaseConstants.expectedPlayerKeyLength,
-                let prefix = String(data: key[0...3], encoding: .utf8),
-                prefix == "play",
+                key.starts(with: playerPrefix),
                 let serverPlayerData = iter.currentValue
             else {
                 break
