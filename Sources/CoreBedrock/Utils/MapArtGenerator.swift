@@ -123,7 +123,10 @@ public enum MapArtGenerator {
 
             // The old full-image bitmap was traversed from its first row.
             // Translation preserves that ordering, including transparent edge padding.
-            context.translateBy(x: CGFloat(-x * self.tileSize), y: CGFloat(self.tileSize - image.height + y * self.tileSize))
+            context.translateBy(
+                x: CGFloat(-x * self.tileSize),
+                y: CGFloat(self.tileSize - image.height + y * self.tileSize)
+            )
             context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         }
         return bytes

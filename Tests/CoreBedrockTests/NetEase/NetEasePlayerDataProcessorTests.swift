@@ -17,7 +17,9 @@ struct NetEasePlayerDataProcessorTests {
             "player_uid_2855639031",
             "player_uid_2924597660",
         ]
-        if includeLocalPlayer { playerKeys.append("~local_player") }
+        if includeLocalPlayer {
+            playerKeys.append("~local_player")
+        }
         let mapping = try CompoundTag([
             StringTag(name: "NeteaseUUID", "2855639031"),
             StringTag(name: "ServerId", playerKeys[0]),
@@ -43,22 +45,22 @@ struct NetEasePlayerDataProcessorTests {
 
         try NetEaseWorldTransform.decryptPlayerData(at: worldPath)
         try NetEaseWorldTransform.decryptPlayerData(at: worldPath)
-        do {
-            let db = try LevelDB(dbPath: dbPath, createIfMissing: false)
-            defer { db.close() }
-            for key in playerKeys {
-                #expect(try db.data(forKey: Data(key.utf8)) == bedrockData)
-            }
-            for (key, value) in untouched {
-                #expect(try db.data(forKey: Data(key.utf8)) == value)
-            }
-        }
+        try self.verifyRecords(at: dbPath, playerKeys: playerKeys, expected: bedrockData, untouched: untouched)
 
         try NetEaseWorldTransform.encryptPlayerData(at: worldPath)
+        try self.verifyRecords(at: dbPath, playerKeys: playerKeys, expected: neteaseData, untouched: untouched)
+    }
+
+    private func verifyRecords(
+        at dbPath: String,
+        playerKeys: [String],
+        expected: Data,
+        untouched: [String: Data]
+    ) throws {
         let db = try LevelDB(dbPath: dbPath, createIfMissing: false)
         defer { db.close() }
         for key in playerKeys {
-            #expect(try db.data(forKey: Data(key.utf8)) == neteaseData)
+            #expect(try db.data(forKey: Data(key.utf8)) == expected)
         }
         for (key, value) in untouched {
             #expect(try db.data(forKey: Data(key.utf8)) == value)

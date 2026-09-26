@@ -15,7 +15,7 @@ enum NetEaseConstants {
     static let keyFileName = "netease.key"
     static let defaultKey = Data([0x38, 0x38, 0x33, 0x32, 0x39, 0x38, 0x35, 0x31])
 
-    // Player Data Constants
+    /// Player Data Constants
     static let playerKeyPrefix = "player_"
 
     /// NBT Transform Constants
